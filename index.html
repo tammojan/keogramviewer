@@ -221,11 +221,9 @@ function formatDate(d) {
 }
 
 function drawDayLabels(level, scaleY) {
-  //if (level <= 4) return;
+  if (level > 1) return;
 
   ctx.save();
-
-  // Reset transform so text is screen-space
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 
   ctx.font = "14px sans-serif";
@@ -234,33 +232,38 @@ function drawDayLabels(level, scaleY) {
   ctx.shadowColor = "black";
   ctx.shadowBlur = 4;
 
-  const visibleTop = offsetY;
-  const visibleBottom = offsetY + canvas.height / scaleY;
+  // Convert visible range to BASE IMAGE SPACE
+  const baseVisibleTop =
+    offsetY * (2 ** level);
+  const baseVisibleBottom =
+    (offsetY + canvas.height / scaleY) * (2 ** level);
 
-  const firstDay = Math.floor(visibleTop / DAY_HEIGHT);
-  const lastDay = Math.floor(visibleBottom / DAY_HEIGHT);
+  const firstDay = Math.floor(baseVisibleTop / DAY_HEIGHT);
+  const lastDay = Math.floor(baseVisibleBottom / DAY_HEIGHT);
 
   for (let day = firstDay; day <= lastDay; day++) {
     if (day < 0 || day >= 365) continue;
 
-    const dayTopImage = day * DAY_HEIGHT;
+    const dayTopBase = day * DAY_HEIGHT;
+
+    // Convert BASE → SCREEN
     const yScreen =
-      (dayTopImage - offsetY) * scaleY;
+      (dayTopBase / (2 ** level) - offsetY) * scaleY;
 
     if (yScreen < -20 || yScreen > canvas.height) continue;
 
-    const date = new Date(START_DATE);
-    date.setDate(date.getDate() + day);
+    const date = new Date(2025, 0, 1 + day);
 
     ctx.fillText(
-      formatDate(date),
-      8,                // left margin
-      yScreen + 8       // top-left of the day
+      date.toISOString().slice(0, 10),
+      8,
+      yScreen + 8
     );
   }
 
   ctx.restore();
 }
+
 
 
 // TILE LOADING
