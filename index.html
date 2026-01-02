@@ -48,6 +48,8 @@
 const TILE_WIDTH  = 1440;
 const TILE_HEIGHT = 1024;
 const IMAGE_HEIGHT = 18250;
+const DAY_HEIGHT = IMAGE_HEIGHT / 365;
+const START_DATE = new Date("2025-01-01");
 const MAX_LEVEL = 8;
 
 // STATE
@@ -214,6 +216,53 @@ function getLevel() {
   return Math.max(0, Math.min(MAX_LEVEL, Math.floor(Math.log2(1 / zoom))));
 }
 
+function formatDate(d) {
+  return d.toISOString().slice(0, 10); // YYYY-MM-DD
+}
+
+function drawDayLabels(level, scaleY) {
+  //if (level <= 4) return;
+
+  ctx.save();
+
+  // Reset transform so text is screen-space
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+  ctx.font = "14px sans-serif";
+  ctx.fillStyle = "white";
+  ctx.textBaseline = "top";
+  ctx.shadowColor = "black";
+  ctx.shadowBlur = 4;
+
+  const visibleTop = offsetY;
+  const visibleBottom = offsetY + canvas.height / scaleY;
+
+  const firstDay = Math.floor(visibleTop / DAY_HEIGHT);
+  const lastDay = Math.floor(visibleBottom / DAY_HEIGHT);
+
+  for (let day = firstDay; day <= lastDay; day++) {
+    if (day < 0 || day >= 365) continue;
+
+    const dayTopImage = day * DAY_HEIGHT;
+    const yScreen =
+      (dayTopImage - offsetY) * scaleY;
+
+    if (yScreen < -20 || yScreen > canvas.height) continue;
+
+    const date = new Date(START_DATE);
+    date.setDate(date.getDate() + day);
+
+    ctx.fillText(
+      formatDate(date),
+      8,                // left margin
+      yScreen + 8       // top-left of the day
+    );
+  }
+
+  ctx.restore();
+}
+
+
 // TILE LOADING
 function loadTile(level, ty) {
   const key = `${level}/${ty}`;
@@ -270,6 +319,7 @@ function render() {
   lines.forEach((l,i)=>ctx.fillText(l,20,30+i*18));
 */
   updateScrollbar();
+  drawDayLabels(level, scaleY);
 }
 
 // CLAMP
