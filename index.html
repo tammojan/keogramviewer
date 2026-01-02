@@ -47,8 +47,8 @@
 // CONFIG
 const TILE_WIDTH  = 1440;
 const TILE_HEIGHT = 1024;
-const IMAGE_HEIGHT = 329400;
-const MAX_LEVEL = 9;
+const IMAGE_HEIGHT = 18250;
+const MAX_LEVEL = 8;
 
 // STATE
 const canvas = document.getElementById("viewer");
@@ -206,7 +206,7 @@ function loadTile(level, ty) {
   if (tileCache.has(key)) return tileCache.get(key);
 
   const img = new Image();
-  img.src = `tiles/${level}/${ty}.png`;
+  img.src = `tiles/${level}/${ty}.jpg`;
   img.onload = render;
   img.onerror = () => tileCache.set(key, null);
 
@@ -239,6 +239,7 @@ function render() {
   }
 
   // Optional debug HUD
+/*
   ctx.setTransform(1,0,0,1,0,0);
   ctx.fillStyle = "rgba(0,0,0,0.7)";
   ctx.fillRect(10,10,340,140);
@@ -253,6 +254,7 @@ function render() {
     `tiles: ${firstTile} → ${lastTile}`
   ];
   lines.forEach((l,i)=>ctx.fillText(l,20,30+i*18));
+*/
   updateScrollbar();
 }
 
