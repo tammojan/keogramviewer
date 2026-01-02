@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Vertical Infinite Zoom Viewer</title>
+<title>Vertical Infinite Zoom Viewer (Debug)</title>
 <style>
   html, body {
     margin: 0;
@@ -36,8 +36,8 @@ const MAX_LEVEL = 9;
 const canvas = document.getElementById("viewer");
 const ctx = canvas.getContext("2d");
 
-let zoom = 1;       // scale relative to full resolution
-let offsetY = 0;   // top of viewport in image pixels
+let zoom = 1;       // relative to full resolution
+let offsetY = 0;   // image pixels
 
 let dragging = false;
 let lastY = 0;
@@ -51,7 +51,6 @@ function resize() {
   canvas.height = window.innerHeight;
   render();
 }
-
 window.addEventListener("resize", resize);
 resize();
 
@@ -66,12 +65,10 @@ function getLevel() {
 
 function loadTile(level, ty) {
   const key = `${level}/${ty}`;
-
   if (tileCache.has(key)) return tileCache.get(key);
 
   const img = new Image();
   img.src = `tiles/${level}/${ty}.png`;
-
   img.onload = render;
   img.onerror = () => tileCache.set(key, null);
 
@@ -87,7 +84,9 @@ function render() {
 
   const level = getLevel();
   const levelScale = 1 / (2 ** level);
-  const scaleY = zoom * levelScale;
+
+  // ✅ CORRECT SCALE
+  const scaleY = zoom / levelScale;
   const scaleX = canvas.width / TILE_WIDTH;
 
   ctx.setTransform(
@@ -114,9 +113,35 @@ function render() {
     if (!img || !img.complete || img.naturalWidth === 0) continue;
     ctx.drawImage(img, 0, ty * TILE_HEIGHT);
   }
+
+  drawDebug(level, scaleY, firstTile, lastTile);
 }
 
-/* ============ ZOOM ============ */
+/* ============ DEBUG HUD ============ */
+
+function drawDebug(level, scaleY, firstTile, lastTile) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = "rgba(0,0,0,0.7)";
+  ctx.fillRect(10, 10, 340, 140);
+
+  ctx.fillStyle = "#0f0";
+  ctx.font = "12px monospace";
+
+  const lines = [
+    `zoom: ${zoom.toExponential(3)}`,
+    `level: ${level}`,
+    `scaleY: ${scaleY.toExponential(3)}`,
+    `offsetY: ${offsetY.toFixed(1)}`,
+    `view height: ${(canvas.height / zoom).toFixed(1)}`,
+    `tiles: ${firstTile} → ${lastTile}`
+  ];
+
+  lines.forEach((l, i) => {
+    ctx.fillText(l, 20, 30 + i * 18);
+  });
+}
+
+/* ============ INPUT ============ */
 
 canvas.addEventListener("wheel", e => {
   e.preventDefault();
@@ -134,8 +159,6 @@ canvas.addEventListener("wheel", e => {
   clampOffset();
   render();
 }, { passive: false });
-
-/* ============ PAN ============ */
 
 canvas.addEventListener("mousedown", e => {
   dragging = true;
