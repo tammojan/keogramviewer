@@ -284,7 +284,7 @@ function clampOffset() {
 
 // ZOOM
 const MIN_ZOOM = canvas.height / IMAGE_HEIGHT;
-const MAX_ZOOM = 1e6;
+const MAX_ZOOM = canvas.height / (2 ** MAX_LEVEL);
 
 canvas.addEventListener("wheel", e => {
   e.preventDefault();
