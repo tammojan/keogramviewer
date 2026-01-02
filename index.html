@@ -17,11 +17,31 @@
   canvas:active {
     cursor: grabbing;
   }
+#scrollbar {
+  position: fixed;
+  right: 0;
+  top: 0;
+  width: 14px;
+  height: 100%;
+  background: rgba(255,255,255,0.08);
+}
+
+#thumb {
+  position: absolute;
+  left: 2px;
+  width: 10px;
+  background: rgba(255,255,255,0.6);
+  border-radius: 6px;
+  cursor: pointer;
+}
 </style>
 </head>
 <body>
 
 <canvas id="viewer"></canvas>
+<div id="scrollbar">
+  <div id="thumb"></div>
+</div>
 
 <script>
 /* ================= CONFIG ================= */
@@ -35,6 +55,8 @@ const MAX_LEVEL = 9;
 
 const canvas = document.getElementById("viewer");
 const ctx = canvas.getContext("2d");
+const scrollbar = document.getElementById("scrollbar");
+const thumb = document.getElementById("thumb");
 
 let zoom = 1;        // scale relative to full resolution
 let offsetY = 0;    // image-space Y (full-res pixels)
@@ -53,6 +75,21 @@ function resize() {
 }
 window.addEventListener("resize", resize);
 resize();
+
+/* ============= SCROLLBAR =========== */
+function updateScrollbar() {
+  const visible = canvas.height / zoom;
+  const ratio = visible / IMAGE_HEIGHT;
+
+  const thumbHeight = Math.max(20, ratio * scrollbar.clientHeight);
+  thumb.style.height = thumbHeight + "px";
+
+  const maxOffset = IMAGE_HEIGHT - visible;
+  const t = maxOffset > 0 ? offsetY / maxOffset : 0;
+
+  const maxThumbY = scrollbar.clientHeight - thumbHeight;
+  thumb.style.top = (t * maxThumbY) + "px";
+}
 
 /* ================= LEVEL SELECTION ================= */
 
@@ -111,6 +148,8 @@ function render() {
   }
 
   drawDebug(level, scaleY, firstTile, lastTile);
+
+  updateScrollbar();
 }
 
 /* ================= DEBUG HUD ================= */
