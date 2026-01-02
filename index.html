@@ -58,6 +58,9 @@ let zoom = 1;        // user zoom factor
 let offsetY = 0;     // in LEVEL SPACE (pixels of current pyramid level)
 
 let dragging = false;
+let draggingThumb = false;
+let thumbStartY = 0;
+let offsetStart = 0;
 let lastY = 0;
 const tileCache = new Map();
 
@@ -71,16 +74,50 @@ window.addEventListener("resize", resize);
 resize();
 
 /* ============= SCROLLBAR =========== */
-function updateScrollbar() {
-  const visible = canvas.height / zoom;
-  const ratio = visible / IMAGE_HEIGHT;
+thumb.addEventListener("mousedown", e => {
+  draggingThumb = true;
+  thumbStartY = e.clientY;
+  offsetStart = offsetY;
+  e.preventDefault();
+});
 
-  const thumbHeight = Math.max(20, ratio * scrollbar.clientHeight);
+window.addEventListener("mousemove", e => {
+  if (!draggingThumb) return;
+
+  const level = getLevel();
+  const scaleY = zoom * (2 ** level);
+  const visible = canvas.height / scaleY;
+  const levelHeight = IMAGE_HEIGHT / (2 ** level);
+  const maxOffset = levelHeight - visible;
+  if (maxOffset <= 0) return;
+
+  const thumbHeight = thumb.clientHeight;
+  const maxThumbY = scrollbar.clientHeight - thumbHeight;
+
+  const dy = e.clientY - thumbStartY;
+  const delta = dy / maxThumbY;
+
+  offsetY = offsetStart + delta * maxOffset;
+  clampOffset();
+  render();
+});
+
+window.addEventListener("mouseup", () => draggingThumb = false);
+
+function updateScrollbar() {
+  const level = getLevel();
+  const scaleY = zoom * (2 ** level);
+
+  const visible = canvas.height / scaleY;
+  const levelHeight = IMAGE_HEIGHT / (2 ** level);
+  const maxOffset = levelHeight - visible;
+
+  // Thumb size proportional to visible fraction
+  const thumbHeight = Math.max(20, (visible / levelHeight) * scrollbar.clientHeight);
   thumb.style.height = thumbHeight + "px";
 
-  const maxOffset = IMAGE_HEIGHT - visible;
+  // Thumb position
   const t = maxOffset > 0 ? offsetY / maxOffset : 0;
-
   const maxThumbY = scrollbar.clientHeight - thumbHeight;
   thumb.style.top = (t * maxThumbY) + "px";
 }
