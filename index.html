@@ -44,30 +44,24 @@
 </div>
 
 <script>
-/* ================= CONFIG ================= */
-
+// CONFIG
 const TILE_WIDTH  = 1440;
 const TILE_HEIGHT = 1024;
 const IMAGE_HEIGHT = 329400;
 const MAX_LEVEL = 9;
 
-/* ================= STATE ================= */
-
+// STATE
 const canvas = document.getElementById("viewer");
 const ctx = canvas.getContext("2d");
-const scrollbar = document.getElementById("scrollbar");
-const thumb = document.getElementById("thumb");
 
-let zoom = 1;        // scale relative to full resolution
-let offsetY = 0;    // image-space Y (full-res pixels)
+let zoom = 1;        // user zoom factor
+let offsetY = 0;     // in LEVEL SPACE (pixels of current pyramid level)
 
 let dragging = false;
 let lastY = 0;
-
 const tileCache = new Map();
 
-/* ================= RESIZE ================= */
-
+// RESIZE
 function resize() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
@@ -91,15 +85,12 @@ function updateScrollbar() {
   thumb.style.top = (t * maxThumbY) + "px";
 }
 
-/* ================= LEVEL SELECTION ================= */
-
+// LEVEL SELECTION
 function getLevel() {
-  const ideal = Math.log2(1 / zoom);
-  return Math.max(0, Math.min(MAX_LEVEL, Math.floor(ideal)));
+  return Math.max(0, Math.min(MAX_LEVEL, Math.floor(Math.log2(1 / zoom))));
 }
 
-/* ================= TILE LOADING ================= */
-
+// TILE LOADING
 function loadTile(level, ty) {
   const key = `${level}/${ty}`;
   if (tileCache.has(key)) return tileCache.get(key);
@@ -113,148 +104,110 @@ function loadTile(level, ty) {
   return img;
 }
 
-/* ================= RENDER ================= */
-
+// RENDER
 function render() {
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
   const level = getLevel();
-
-  // Level tiles are downscaled by 2^level
   const scaleY = zoom * (2 ** level);
   const scaleX = canvas.width / TILE_WIDTH;
 
-  ctx.setTransform(
-    scaleX, 0,
-    0, scaleY,
-    0, -offsetY * scaleY
-  );
+  ctx.setTransform(scaleX,0,0,scaleY,0,-offsetY*scaleY);
 
-  const viewTop = offsetY;
-  const viewBottom = offsetY + canvas.height / zoom;
+  const levelHeight = IMAGE_HEIGHT / (2 ** level);
+  const visible = canvas.height / scaleY;
+  const maxTile = Math.ceil(levelHeight / TILE_HEIGHT) - 1;
 
-  const tileImageHeight = TILE_HEIGHT * (2 ** level);
-  const levelImageHeight = IMAGE_HEIGHT / (2 ** level);
-  const maxTile = Math.ceil(levelImageHeight / TILE_HEIGHT) - 1;
-
-  const firstTile = Math.max(0, Math.floor(viewTop / tileImageHeight));
-  const lastTile  = Math.min(maxTile, Math.ceil(viewBottom / tileImageHeight));
+  const firstTile = Math.max(0, Math.floor(offsetY / TILE_HEIGHT));
+  const lastTile = Math.min(maxTile, Math.ceil((offsetY + visible) / TILE_HEIGHT));
 
   for (let ty = firstTile; ty <= lastTile; ty++) {
     const img = loadTile(level, ty);
-    if (!img || !img.complete || img.naturalWidth === 0) continue;
+    if (!img || !img.complete || img.naturalWidth===0) continue;
     ctx.drawImage(img, 0, ty * TILE_HEIGHT);
   }
 
-  drawDebug(level, scaleY, firstTile, lastTile);
-
-  updateScrollbar();
-}
-
-/* ================= DEBUG HUD ================= */
-
-function drawDebug(level, scaleY, firstTile, lastTile) {
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  // Optional debug HUD
+  ctx.setTransform(1,0,0,1,0,0);
   ctx.fillStyle = "rgba(0,0,0,0.7)";
-  ctx.fillRect(10, 10, 340, 140);
-
+  ctx.fillRect(10,10,340,140);
   ctx.fillStyle = "#0f0";
   ctx.font = "12px monospace";
-
   const lines = [
     `zoom: ${zoom.toExponential(3)}`,
     `level: ${level}`,
     `scaleY: ${scaleY.toExponential(3)}`,
     `offsetY: ${offsetY.toFixed(1)}`,
-    `view height: ${(canvas.height / zoom).toFixed(1)}`,
+    `view height: ${visible.toFixed(1)}`,
     `tiles: ${firstTile} → ${lastTile}`
   ];
-
-  lines.forEach((l, i) => ctx.fillText(l, 20, 30 + i * 18));
+  lines.forEach((l,i)=>ctx.fillText(l,20,30+i*18));
+  updateScrollbar();
 }
 
-/* ================= INPUT ================= */
+// CLAMP
+function clampOffset() {
+  const level = getLevel();
+  const scaleY = zoom * (2 ** level);
+  const visible = canvas.height / scaleY;
+  const levelHeight = IMAGE_HEIGHT / (2 ** level);
+  const maxOffset = levelHeight - visible;
+  offsetY = Math.max(0, Math.min(maxOffset, offsetY));
+}
 
+// ZOOM
 const MIN_ZOOM = canvas.height / IMAGE_HEIGHT;
 const MAX_ZOOM = 1e6;
 
-/* ---- Zoom ---- */
-
-canvas.addEventListener("wheel", e => {
+canvas.addEventListener("wheel", e=>{
   e.preventDefault();
 
   const oldLevel = getLevel();
   const oldScaleY = zoom * (2 ** oldLevel);
 
   const mouseY = e.offsetY;
+  const imageY = offsetY + mouseY / oldScaleY; // level-space anchor
 
-  // Image-space Y under cursor BEFORE zoom
-  const imageY = offsetY + mouseY / oldScaleY;
-
-  // Apply zoom
   const factor = Math.exp(-e.deltaY * 0.001);
   zoom *= factor;
-  zoom = Math.max(MIN_ZOOM * 0.99, Math.min(MAX_ZOOM, zoom));
+  zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
 
-  // Level may have changed → recompute scale
   const newLevel = getLevel();
   const newScaleY = zoom * (2 ** newLevel);
-
-  // Re-anchor imageY under cursor
   offsetY = imageY - mouseY / newScaleY;
 
   clampOffset();
   render();
-}, { passive: false });
+}, { passive:false });
 
-/* ---- Pan ---- */
-
+// PAN
 canvas.addEventListener("mousedown", e => {
   dragging = true;
   lastY = e.clientY;
 });
 
-window.addEventListener("mousemove", e => {
-  if (!dragging) return;
+window.addEventListener("mousemove", e=>{
+  if(!dragging) return;
 
+  const level = getLevel();
+  const scaleY = zoom * (2 ** level);
   const dy = e.clientY - lastY;
   lastY = e.clientY;
 
-  const level = getLevel();
-  offsetY -= dy / (zoom * (2 ** level));
-
+  offsetY -= dy / scaleY;
   clampOffset();
   render();
 });
 
-window.addEventListener("mouseup", () => dragging = false);
+window.addEventListener("mouseup", ()=>dragging=false);
 
-/* ================= HELPERS ================= */
-
-function levelImageHeight(level) {
-  return Math.ceil(IMAGE_HEIGHT / (2 ** level));
-}
-
-function clampOffset() {
-  const level = getLevel();
-  const scaleY = zoom * (2 ** level);
-
-  const visible = canvas.height / scaleY;
-
-  const levelHeight = IMAGE_HEIGHT / (2 ** level);
-
-  const maxOffset = levelHeight - visible;
-  console.log("level: " + level + " scaleY: " + scaleY + " visible: " + visible + " levelHeight: " + levelHeight + " maxOffset: " + maxOffset);
-  offsetY = Math.max(0, Math.min(maxOffset, offsetY));
-}
-
-/* ================= INIT ================= */
-
+// INIT
 zoom = canvas.height / IMAGE_HEIGHT; // fully zoomed out
 offsetY = 0;
 render();
 </script>
+
 
 </body>
 </html>
