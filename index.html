@@ -59,8 +59,11 @@ let offsetY = 0;     // in LEVEL SPACE (pixels of current pyramid level)
 
 let touchDragging = false;
 let lastTouchY = 0;
-let dragging = false;
+let pinchLevel = null;
+let midYStart = 0;
+let imageYStart = 0;
 let lastPinchDistance = null;
+let dragging = false;
 let draggingThumb = false;
 let thumbStartY = 0;
 let offsetStart = 0;
@@ -114,60 +117,46 @@ function getDistance(touches) {
   return Math.hypot(dx, dy);
 }
 
-canvas.addEventListener("touchstart", e => {
-  if (e.touches.length === 2) {
-    lastPinchDistance = getDistance(e.touches);
-    e.preventDefault();
-  }
-}, { passive: false });
-
-canvas.addEventListener("touchmove", e => {
-  if (e.touches.length !== 2 || lastPinchDistance === null) return;
-
-  // Use midpoint as the anchor point
-  const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-  const level = getLevel();
-  const scaleY = zoom * (2 ** level);
-  const imageY = (offsetY + midY / scaleY) * (2 ** level);
-
-  // zoom factor
-  zoom *= factor;
-  zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
-
-  const newLevel = getLevel();
-  const newScaleY = zoom * (2 ** newLevel);
-
-  // convert back to new level-space
-  offsetY = imageY / (2 ** newLevel) - midY / newScaleY;
-
-  clampOffset();
-  render();
-}, { passive: false });
-
-canvas.addEventListener("touchend", e => {
-  if (e.touches.length < 2) lastPinchDistance = null;
-});
-
+// SINGLE-FINGER PAN START
 canvas.addEventListener("touchstart", e => {
   if (e.touches.length === 1) {
     touchDragging = true;
     lastTouchY = e.touches[0].clientY;
     e.preventDefault();
   }
-}, { passive: false });
+  // PINCH START
+  else if (e.touches.length === 2) {
+    pinchLevel = getLevel(); // lock level during pinch
+    lastPinchDistance = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+    midYStart = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+    const scaleY = zoom * (2 ** pinchLevel);
+    imageYStart = (offsetY + midYStart / scaleY) * (2 ** pinchLevel);
+    e.preventDefault();
+  }
+}, { passive:false });
 
+// SINGLE-FINGER PAN / PINCH MOVE
 canvas.addEventListener("touchmove", e => {
-  if (e.touches.length === 2 && lastPinchDistance !== null) {
+
+  // ONE-FINGER PAN
+  if (e.touches.length === 1 && touchDragging) {
     const level = getLevel();
-    const oldScaleY = zoom * (2 ** level);
+    const scaleY = zoom * (2 ** level);
 
-    // Use midpoint as anchor
-    const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+    const dy = e.touches[0].clientY - lastTouchY;
+    lastTouchY = e.touches[0].clientY;
 
-    // Compute absolute row in base level-space
-    const imageY = (offsetY + midY / oldScaleY) * (2 ** level);
+    offsetY -= dy / scaleY; // LEVEL SPACE
+    clampOffset();
+    render();
+    e.preventDefault();
+  }
 
-    // Pinch factor
+  // TWO-FINGER PINCH
+  else if (e.touches.length === 2 && lastPinchDistance !== null && pinchLevel !== null) {
     const newDistance = Math.hypot(
       e.touches[0].clientX - e.touches[1].clientX,
       e.touches[0].clientY - e.touches[1].clientY
@@ -175,25 +164,32 @@ canvas.addEventListener("touchmove", e => {
     const factor = newDistance / lastPinchDistance;
     lastPinchDistance = newDistance;
 
+    // Update zoom
     zoom *= factor;
     zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
 
-    const newLevel = getLevel();
-    const newScaleY = zoom * (2 ** newLevel);
+    const newScaleY = zoom * (2 ** pinchLevel);
+    const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
 
-    // Convert back to new level-space
-    offsetY = imageY / (2 ** newLevel) - midY / newScaleY;
+    // Keep the same image row under pinch midpoint
+    offsetY = imageYStart / (2 ** pinchLevel) - midY / newScaleY;
 
     clampOffset();
     render();
     e.preventDefault();
   }
-}, { passive:false });
 
+});
 
+// TOUCH END
 canvas.addEventListener("touchend", e => {
   if (e.touches.length === 0) touchDragging = false;
+  if (e.touches.length < 2) {
+    lastPinchDistance = null;
+    pinchLevel = null;
+  }
 });
+
 
 function updateScrollbar() {
   const level = getLevel();
