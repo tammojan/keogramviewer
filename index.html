@@ -30,15 +30,14 @@ const TILE_WIDTH = 1440;
 const TILE_HEIGHT = 1024;
 const IMAGE_HEIGHT = 329400;
 const MAX_LEVEL = 9;
-const TILE_PATH = level => `tiles/${level}/`;
 
 /* ================= STATE ================= */
 
 const canvas = document.getElementById("viewer");
 const ctx = canvas.getContext("2d");
 
-let zoom = 1;          // vertical scale
-let offsetY = 0;      // top of viewport in image coords
+let zoom = 1;
+let offsetY = 0;
 let dragging = false;
 let lastY = 0;
 
@@ -69,8 +68,11 @@ function loadTile(level, ty) {
   if (tileCache.has(key)) return tileCache.get(key);
 
   const img = new Image();
-  img.src = TILE_PATH(level) + ty + ".png";
+  img.src = `tiles/${level}/${ty}.png`;
   img.onload = render;
+  img.onerror = () => {
+    tileCache.set(key, null); // mark as missing
+  };
   tileCache.set(key, img);
   return img;
 }
@@ -83,8 +85,9 @@ function render() {
 
   const level = getLevel();
   const scale = 1 / (2 ** level);
-  const levelZoom = zoom * scale;
+  const levelZoom = zoom / scale;
 
+  // Fit width exactly
   ctx.setTransform(
     canvas.width / TILE_WIDTH, 0,
     0, levelZoom,
@@ -94,7 +97,7 @@ function render() {
   const viewTop = offsetY;
   const viewBottom = offsetY + canvas.height / zoom;
 
-  const tileHeight = TILE_HEIGHT / scale;
+  const tileHeight = TILE_HEIGHT * (2 ** level);
 
   const firstTile = Math.floor(viewTop / tileHeight);
   const lastTile = Math.ceil(viewBottom / tileHeight);
@@ -102,12 +105,8 @@ function render() {
   for (let ty = firstTile; ty <= lastTile; ty++) {
     if (ty < 0) continue;
     const img = loadTile(level, ty);
-    if (!img.complete) continue;
-    ctx.drawImage(
-      img,
-      0,
-      ty * TILE_HEIGHT
-    );
+    if (!img || !img.complete || img.naturalWidth ===0) continue;
+    ctx.drawImage(img, 0, ty * TILE_HEIGHT);
   }
 }
 
@@ -120,10 +119,16 @@ canvas.addEventListener("wheel", e => {
   const imageY = offsetY + mouseY / zoom;
 
   const factor = Math.exp(-e.deltaY * 0.001);
-  zoom = Math.max(0.05, Math.min(1e6, zoom * factor));
+  zoom = Math.max(
+    canvas.height / IMAGE_HEIGHT,
+    Math.min(1e6, zoom * factor)
+  );
 
   offsetY = imageY - mouseY / zoom;
-  offsetY = Math.max(0, Math.min(IMAGE_HEIGHT - canvas.height / zoom, offsetY));
+  offsetY = Math.max(
+    0,
+    Math.min(IMAGE_HEIGHT - canvas.height / zoom, offsetY)
+  );
 
   render();
 }, { passive: false });
@@ -141,7 +146,10 @@ window.addEventListener("mousemove", e => {
   lastY = e.clientY;
 
   offsetY -= dy / zoom;
-  offsetY = Math.max(0, Math.min(IMAGE_HEIGHT - canvas.height / zoom, offsetY));
+  offsetY = Math.max(
+    0,
+    Math.min(IMAGE_HEIGHT - canvas.height / zoom, offsetY)
+  );
 
   render();
 });
@@ -150,8 +158,8 @@ window.addEventListener("mouseup", () => dragging = false);
 
 /* ================= INIT ================= */
 
+zoom = canvas.height / IMAGE_HEIGHT; // fully zoomed out
 offsetY = 0;
-zoom = canvas.height / IMAGE_HEIGHT; // fit whole image vertically
 render();
 </script>
 
