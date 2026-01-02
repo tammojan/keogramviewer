@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Vertical Infinite Zoom Viewer (Debug)</title>
+<title>Vertical Infinite Zoom Viewer</title>
 <style>
   html, body {
     margin: 0;
@@ -25,19 +25,17 @@
 
 <script>
 /* ============ CONFIG ============ */
-
 const TILE_WIDTH = 1440;
 const TILE_HEIGHT = 1024;
 const IMAGE_HEIGHT = 329400;
 const MAX_LEVEL = 9;
 
 /* ============ STATE ============ */
-
 const canvas = document.getElementById("viewer");
 const ctx = canvas.getContext("2d");
 
-let zoom = 1;       // relative to full resolution
-let offsetY = 0;   // image pixels
+let zoom = 1;        // relative to full resolution
+let offsetY = 0;     // top of viewport in image pixels
 
 let dragging = false;
 let lastY = 0;
@@ -45,7 +43,6 @@ let lastY = 0;
 const tileCache = new Map();
 
 /* ============ RESIZE ============ */
-
 function resize() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
@@ -55,14 +52,12 @@ window.addEventListener("resize", resize);
 resize();
 
 /* ============ LEVEL SELECTION ============ */
-
 function getLevel() {
   const ideal = Math.log2(1 / zoom);
   return Math.max(0, Math.min(MAX_LEVEL, Math.floor(ideal)));
 }
 
 /* ============ TILE LOADING ============ */
-
 function loadTile(level, ty) {
   const key = `${level}/${ty}`;
   if (tileCache.has(key)) return tileCache.get(key);
@@ -77,15 +72,12 @@ function loadTile(level, ty) {
 }
 
 /* ============ RENDER ============ */
-
 function render() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   const level = getLevel();
   const levelScale = 1 / (2 ** level);
-
-  // ✅ CORRECT SCALE
   const scaleY = zoom / levelScale;
   const scaleX = canvas.width / TILE_WIDTH;
 
@@ -103,10 +95,7 @@ function render() {
   const maxTile = Math.ceil(levelImageHeight / TILE_HEIGHT) - 1;
 
   const firstTile = Math.max(0, Math.floor(viewTop / tileImageHeight));
-  const lastTile = Math.min(
-    maxTile,
-    Math.ceil(viewBottom / tileImageHeight)
-  );
+  const lastTile = Math.min(maxTile, Math.ceil(viewBottom / tileImageHeight));
 
   for (let ty = firstTile; ty <= lastTile; ty++) {
     const img = loadTile(level, ty);
@@ -118,7 +107,6 @@ function render() {
 }
 
 /* ============ DEBUG HUD ============ */
-
 function drawDebug(level, scaleY, firstTile, lastTile) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = "rgba(0,0,0,0.7)";
@@ -136,12 +124,12 @@ function drawDebug(level, scaleY, firstTile, lastTile) {
     `tiles: ${firstTile} → ${lastTile}`
   ];
 
-  lines.forEach((l, i) => {
-    ctx.fillText(l, 20, 30 + i * 18);
-  });
+  lines.forEach((l, i) => ctx.fillText(l, 20, 30 + i * 18));
 }
 
-/* ============ INPUT ============ */
+/* ============ INPUT HANDLERS ============ */
+const MIN_ZOOM = canvas.height / IMAGE_HEIGHT;
+const MAX_ZOOM = 1e6;
 
 canvas.addEventListener("wheel", e => {
   e.preventDefault();
@@ -150,10 +138,8 @@ canvas.addEventListener("wheel", e => {
   const imageY = offsetY + mouseY / zoom;
 
   const factor = Math.exp(-e.deltaY * 0.001);
-  zoom = Math.max(
-    canvas.height / IMAGE_HEIGHT,
-    Math.min(1e6, zoom * factor)
-  );
+  zoom *= factor;
+  zoom = Math.max(MIN_ZOOM * 0.99, Math.min(MAX_ZOOM, zoom));
 
   offsetY = imageY - mouseY / zoom;
   clampOffset();
@@ -167,10 +153,14 @@ canvas.addEventListener("mousedown", e => {
 
 window.addEventListener("mousemove", e => {
   if (!dragging) return;
+
   const dy = e.clientY - lastY;
   lastY = e.clientY;
 
-  offsetY -= dy / zoom;
+  const level = getLevel();
+  const levelScale = 2 ** level; // image pixels per level pixel
+  offsetY -= dy / (zoom * levelScale);
+
   clampOffset();
   render();
 });
@@ -178,7 +168,6 @@ window.addEventListener("mousemove", e => {
 window.addEventListener("mouseup", () => dragging = false);
 
 /* ============ HELPERS ============ */
-
 function clampOffset() {
   offsetY = Math.max(
     0,
@@ -187,7 +176,6 @@ function clampOffset() {
 }
 
 /* ============ INIT ============ */
-
 zoom = canvas.height / IMAGE_HEIGHT; // fully zoomed out
 offsetY = 0;
 render();
