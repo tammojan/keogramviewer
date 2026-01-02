@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Vertical Infinite Zoom Viewer</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+  }
+  canvas {
+    display: block;
+    cursor: grab;
+  }
+  canvas:active {
+    cursor: grabbing;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="viewer"></canvas>
+
+<script>
+/* ================= CONFIG ================= */
+
+const TILE_WIDTH = 1440;
+const TILE_HEIGHT = 1024;
+const IMAGE_HEIGHT = 329400;
+const MAX_LEVEL = 9;
+const TILE_PATH = level => `tiles/${level}/`;
+
+/* ================= STATE ================= */
+
+const canvas = document.getElementById("viewer");
+const ctx = canvas.getContext("2d");
+
+let zoom = 1;          // vertical scale
+let offsetY = 0;      // top of viewport in image coords
+let dragging = false;
+let lastY = 0;
+
+const tileCache = new Map();
+
+/* ================= RESIZE ================= */
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  render();
+}
+
+window.addEventListener("resize", resize);
+resize();
+
+/* ================= LEVEL SELECTION ================= */
+
+function getLevel() {
+  const ideal = Math.log2(1 / zoom);
+  return Math.max(0, Math.min(MAX_LEVEL, Math.floor(ideal)));
+}
+
+/* ================= TILE LOADING ================= */
+
+function loadTile(level, ty) {
+  const key = `${level}/${ty}`;
+  if (tileCache.has(key)) return tileCache.get(key);
+
+  const img = new Image();
+  img.src = TILE_PATH(level) + ty + ".png";
+  img.onload = render;
+  tileCache.set(key, img);
+  return img;
+}
+
+/* ================= RENDER ================= */
+
+function render() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const level = getLevel();
+  const scale = 1 / (2 ** level);
+  const levelZoom = zoom * scale;
+
+  ctx.setTransform(
+    canvas.width / TILE_WIDTH, 0,
+    0, levelZoom,
+    0, -offsetY * levelZoom
+  );
+
+  const viewTop = offsetY;
+  const viewBottom = offsetY + canvas.height / zoom;
+
+  const tileHeight = TILE_HEIGHT / scale;
+
+  const firstTile = Math.floor(viewTop / tileHeight);
+  const lastTile = Math.ceil(viewBottom / tileHeight);
+
+  for (let ty = firstTile; ty <= lastTile; ty++) {
+    if (ty < 0) continue;
+    const img = loadTile(level, ty);
+    if (!img.complete) continue;
+    ctx.drawImage(
+      img,
+      0,
+      ty * TILE_HEIGHT
+    );
+  }
+}
+
+/* ================= ZOOM ================= */
+
+canvas.addEventListener("wheel", e => {
+  e.preventDefault();
+
+  const mouseY = e.offsetY;
+  const imageY = offsetY + mouseY / zoom;
+
+  const factor = Math.exp(-e.deltaY * 0.001);
+  zoom = Math.max(0.05, Math.min(1e6, zoom * factor));
+
+  offsetY = imageY - mouseY / zoom;
+  offsetY = Math.max(0, Math.min(IMAGE_HEIGHT - canvas.height / zoom, offsetY));
+
+  render();
+}, { passive: false });
+
+/* ================= PAN ================= */
+
+canvas.addEventListener("mousedown", e => {
+  dragging = true;
+  lastY = e.clientY;
+});
+
+window.addEventListener("mousemove", e => {
+  if (!dragging) return;
+  const dy = e.clientY - lastY;
+  lastY = e.clientY;
+
+  offsetY -= dy / zoom;
+  offsetY = Math.max(0, Math.min(IMAGE_HEIGHT - canvas.height / zoom, offsetY));
+
+  render();
+});
+
+window.addEventListener("mouseup", () => dragging = false);
+
+/* ================= INIT ================= */
+
+offsetY = 0;
+zoom = canvas.height / IMAGE_HEIGHT; // fit whole image vertically
+render();
+</script>
+
+</body>
+</html>
+
