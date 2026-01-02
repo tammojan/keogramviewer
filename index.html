@@ -57,7 +57,10 @@ const ctx = canvas.getContext("2d");
 let zoom = 1;        // user zoom factor
 let offsetY = 0;     // in LEVEL SPACE (pixels of current pyramid level)
 
+let touchDragging = false;
+let lastTouchY = 0;
 let dragging = false;
+let lastPinchDistance = null;
 let draggingThumb = false;
 let thumbStartY = 0;
 let offsetStart = 0;
@@ -103,6 +106,76 @@ window.addEventListener("mousemove", e => {
 });
 
 window.addEventListener("mouseup", () => draggingThumb = false);
+
+// Touch
+function getDistance(touches) {
+  const dy = touches[0].clientY - touches[1].clientY;
+  const dx = touches[0].clientX - touches[1].clientX;
+  return Math.hypot(dx, dy);
+}
+
+canvas.addEventListener("touchstart", e => {
+  if (e.touches.length === 2) {
+    lastPinchDistance = getDistance(e.touches);
+    e.preventDefault();
+  }
+}, { passive: false });
+
+canvas.addEventListener("touchmove", e => {
+  if (e.touches.length !== 2 || lastPinchDistance === null) return;
+
+  const level = getLevel();
+  const oldScaleY = zoom * (2 ** level);
+
+  // Use midpoint as the anchor point
+  const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+  const imageY = offsetY + midY / oldScaleY;
+
+  const newDistance = getDistance(e.touches);
+  const factor = newDistance / lastPinchDistance;
+  lastPinchDistance = newDistance;
+
+  zoom *= factor;
+  zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
+
+  const newLevel = getLevel();
+  const newScaleY = zoom * (2 ** newLevel);
+  offsetY = imageY - midY / newScaleY;
+
+  clampOffset();
+  render();
+}, { passive: false });
+
+canvas.addEventListener("touchend", e => {
+  if (e.touches.length < 2) lastPinchDistance = null;
+});
+
+canvas.addEventListener("touchstart", e => {
+  if (e.touches.length === 1) {
+    touchDragging = true;
+    lastTouchY = e.touches[0].clientY;
+    e.preventDefault();
+  }
+}, { passive: false });
+
+canvas.addEventListener("touchmove", e => {
+  if (!touchDragging) return;
+  if (e.touches.length !== 1) return;
+
+  const level = getLevel();
+  const scaleY = zoom * (2 ** level);
+
+  const dy = e.touches[0].clientY - lastTouchY;
+  lastTouchY = e.touches[0].clientY;
+
+  offsetY -= dy / scaleY;
+  clampOffset();
+  render();
+}, { passive: false });
+
+canvas.addEventListener("touchend", e => {
+  if (e.touches.length === 0) touchDragging = false;
+});
 
 function updateScrollbar() {
   const level = getLevel();
