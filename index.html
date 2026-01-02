@@ -232,8 +232,20 @@ window.addEventListener("mouseup", () => dragging = false);
 
 /* ================= HELPERS ================= */
 
+function levelImageHeight(level) {
+  return Math.ceil(IMAGE_HEIGHT / (2 ** level));
+}
+
 function clampOffset() {
-  const maxOffset = IMAGE_HEIGHT - canvas.height / zoom;
+  const level = getLevel();
+  const scaleY = zoom * (2 ** level);
+
+  const visible = canvas.height / scaleY;
+
+  const levelHeight = IMAGE_HEIGHT / (2 ** level);
+
+  const maxOffset = levelHeight - visible;
+  console.log("level: " + level + " scaleY: " + scaleY + " visible: " + visible + " levelHeight: " + levelHeight + " maxOffset: " + maxOffset);
   offsetY = Math.max(0, Math.min(maxOffset, offsetY));
 }
 
