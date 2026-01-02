@@ -24,26 +24,27 @@
 <canvas id="viewer"></canvas>
 
 <script>
-/* ================= CONFIG ================= */
+/* ============ CONFIG ============ */
 
 const TILE_WIDTH = 1440;
 const TILE_HEIGHT = 1024;
 const IMAGE_HEIGHT = 329400;
 const MAX_LEVEL = 9;
 
-/* ================= STATE ================= */
+/* ============ STATE ============ */
 
 const canvas = document.getElementById("viewer");
 const ctx = canvas.getContext("2d");
 
-let zoom = 1;
-let offsetY = 0;
+let zoom = 1;       // scale relative to full resolution
+let offsetY = 0;   // top of viewport in image pixels
+
 let dragging = false;
 let lastY = 0;
 
 const tileCache = new Map();
 
-/* ================= RESIZE ================= */
+/* ============ RESIZE ============ */
 
 function resize() {
   canvas.width = window.innerWidth;
@@ -54,63 +55,68 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-/* ================= LEVEL SELECTION ================= */
+/* ============ LEVEL SELECTION ============ */
 
 function getLevel() {
   const ideal = Math.log2(1 / zoom);
   return Math.max(0, Math.min(MAX_LEVEL, Math.floor(ideal)));
 }
 
-/* ================= TILE LOADING ================= */
+/* ============ TILE LOADING ============ */
 
 function loadTile(level, ty) {
   const key = `${level}/${ty}`;
+
   if (tileCache.has(key)) return tileCache.get(key);
 
   const img = new Image();
   img.src = `tiles/${level}/${ty}.png`;
+
   img.onload = render;
-  img.onerror = () => {
-    tileCache.set(key, null); // mark as missing
-  };
+  img.onerror = () => tileCache.set(key, null);
+
   tileCache.set(key, img);
   return img;
 }
 
-/* ================= RENDER ================= */
+/* ============ RENDER ============ */
 
 function render() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   const level = getLevel();
-  const scale = 1 / (2 ** level);
-  const levelZoom = zoom / scale;
+  const levelScale = 1 / (2 ** level);
+  const scaleY = zoom * levelScale;
+  const scaleX = canvas.width / TILE_WIDTH;
 
-  // Fit width exactly
   ctx.setTransform(
-    canvas.width / TILE_WIDTH, 0,
-    0, levelZoom,
-    0, -offsetY * levelZoom
+    scaleX, 0,
+    0, scaleY,
+    0, -offsetY * scaleY
   );
 
   const viewTop = offsetY;
   const viewBottom = offsetY + canvas.height / zoom;
 
-  const tileHeight = TILE_HEIGHT * (2 ** level);
+  const tileImageHeight = TILE_HEIGHT * (2 ** level);
+  const levelImageHeight = IMAGE_HEIGHT / (2 ** level);
+  const maxTile = Math.ceil(levelImageHeight / TILE_HEIGHT) - 1;
 
-  const firstTile = Math.floor(viewTop / tileHeight);
-  const lastTile = Math.ceil(viewBottom / tileHeight);
+  const firstTile = Math.max(0, Math.floor(viewTop / tileImageHeight));
+  const lastTile = Math.min(
+    maxTile,
+    Math.ceil(viewBottom / tileImageHeight)
+  );
 
   for (let ty = firstTile; ty <= lastTile; ty++) {
-    if (ty < 0) continue;
     const img = loadTile(level, ty);
-    if (!img || !img.complete || img.naturalWidth ===0) continue;
+    if (!img || !img.complete || img.naturalWidth === 0) continue;
     ctx.drawImage(img, 0, ty * TILE_HEIGHT);
   }
 }
 
-/* ================= ZOOM ================= */
+/* ============ ZOOM ============ */
 
 canvas.addEventListener("wheel", e => {
   e.preventDefault();
@@ -125,15 +131,11 @@ canvas.addEventListener("wheel", e => {
   );
 
   offsetY = imageY - mouseY / zoom;
-  offsetY = Math.max(
-    0,
-    Math.min(IMAGE_HEIGHT - canvas.height / zoom, offsetY)
-  );
-
+  clampOffset();
   render();
 }, { passive: false });
 
-/* ================= PAN ================= */
+/* ============ PAN ============ */
 
 canvas.addEventListener("mousedown", e => {
   dragging = true;
@@ -146,17 +148,22 @@ window.addEventListener("mousemove", e => {
   lastY = e.clientY;
 
   offsetY -= dy / zoom;
-  offsetY = Math.max(
-    0,
-    Math.min(IMAGE_HEIGHT - canvas.height / zoom, offsetY)
-  );
-
+  clampOffset();
   render();
 });
 
 window.addEventListener("mouseup", () => dragging = false);
 
-/* ================= INIT ================= */
+/* ============ HELPERS ============ */
+
+function clampOffset() {
+  offsetY = Math.max(
+    0,
+    Math.min(IMAGE_HEIGHT - canvas.height / zoom, offsetY)
+  );
+}
+
+/* ============ INIT ============ */
 
 zoom = canvas.height / IMAGE_HEIGHT; // fully zoomed out
 offsetY = 0;
