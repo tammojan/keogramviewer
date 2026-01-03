@@ -73,6 +73,7 @@ const IMAGE_HEIGHT = 164250;
 const DAY_HEIGHT = IMAGE_HEIGHT / 365;
 const YEAR = 2025;
 const MAX_LEVEL = 9;
+const HOUR_TICK_HEIGHT = 8;
 
 // STATE
 const canvas = document.getElementById("viewer");
@@ -238,10 +239,6 @@ function getLevel() {
   return Math.max(0, Math.min(MAX_LEVEL, Math.floor(Math.log2(1 / zoom))));
 }
 
-function formatDate(d) {
-  return d.toISOString().slice(0, 10); // YYYY-MM-DD
-}
-
 function drawDayLabels(level, scaleY) {
   if (level > 3) return;
 
@@ -285,6 +282,58 @@ function drawDayLabels(level, scaleY) {
 
   ctx.restore();
 }
+
+
+function drawTimeBar() {
+  ctx.save();
+
+  // Screen space (not scaled by zoom/level)
+  ctx.setTransform(1,0,0,1,0,0);
+
+  const marginBottom = HOUR_TICK_HEIGHT; // distance from bottom of canvas
+  const y = canvas.height - marginBottom;
+
+  // Horizontal scale (24 hours → canvas.width)
+  const hourWidth = canvas.width / 24;
+
+  ctx.strokeStyle = "white";
+  ctx.fillStyle = "white";
+  ctx.lineWidth = 1;
+  ctx.font = "12px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.shadowColor = "black";
+  ctx.shadowBlur = 2;
+
+  for (let h = 0; h <= 24; h++) {
+    const x = h * hourWidth;
+
+    // Draw small tick
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x, y + HOUR_TICK_HEIGHT);
+    ctx.stroke();
+
+    if (h % 2 === 0 && h > 1 && h < 24) {
+      const labelNumber = ((h + 16) % 24).toString();
+      const fontSize = 14;
+      ctx.font = `${fontSize}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+
+      // Draw number
+      ctx.fillText(labelNumber, x, y - 12);
+
+      // Draw superscript "h"
+      const hFontSize = fontSize * 0.7; // smaller
+      ctx.font = `${hFontSize}px sans-serif`;
+      ctx.fillText("h", x + ctx.measureText(labelNumber).width, y - 14);
+    }
+  }
+
+  ctx.restore();
+}
+
 
 
 
@@ -345,6 +394,7 @@ function render() {
 */
   updateScrollbar();
   drawDayLabels(level, scaleY);
+  drawTimeBar();
 }
 
 // CLAMP
