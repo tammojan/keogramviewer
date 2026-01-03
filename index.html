@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Vertical Deep Zoom (Working)</title>
+<title>Year-long keogram 2025</title>
 <style>
   html, body {
     margin: 0;
@@ -47,10 +47,10 @@
 // CONFIG
 const TILE_WIDTH  = 1440;
 const TILE_HEIGHT = 1024;
-const IMAGE_HEIGHT = 18250;
+const IMAGE_HEIGHT = 164250;
 const DAY_HEIGHT = IMAGE_HEIGHT / 365;
-const START_DATE = new Date("2025-01-01");
-const MAX_LEVEL = 8;
+const YEAR = 2025;
+const MAX_LEVEL = 9;
 
 // STATE
 const canvas = document.getElementById("viewer");
@@ -221,7 +221,7 @@ function formatDate(d) {
 }
 
 function drawDayLabels(level, scaleY) {
-  if (level > 1) return;
+  if (level > 3) return;
 
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -252,7 +252,7 @@ function drawDayLabels(level, scaleY) {
 
     if (yScreen < -20 || yScreen > canvas.height) continue;
 
-    const date = new Date(2025, 0, 1 + day);
+    const date = new Date(YEAR, 0, day + 2);
 
     ctx.fillText(
       date.toISOString().slice(0, 10),
@@ -337,7 +337,7 @@ function clampOffset() {
 
 // ZOOM
 const MIN_ZOOM = canvas.height / IMAGE_HEIGHT;
-const MAX_ZOOM = canvas.height / (2 ** MAX_LEVEL);
+const MAX_ZOOM = canvas.height / (2 ** (MAX_LEVEL + 1));
 
 canvas.addEventListener("wheel", e => {
   e.preventDefault();
